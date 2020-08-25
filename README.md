@@ -3,9 +3,13 @@ Bilibili收藏视频下载并转成音频文件
 
 # 特点
 1.多线程下载（百度的代码）
+
 2.支持分P
+
 3.支持长视频（理论）
+
 4.支持断点续传
+
 5.支持在添加新视频后无需重新下载整个收藏夹
 
 # 部署
@@ -21,5 +25,7 @@ python3 bilibili_audio_download_linux.py
 
 # 使用
 打开一个Bilibili收藏夹（公开）
+
 复制链接中的fid（例：链接：https://space.bilibili.com/6601679/favlist?fid=1042069179&ftype=create ，fid为1042069179）
+
 所得的fid即为media_id，复制粘贴回车即可
