@@ -33,6 +33,10 @@ python3 bilibili_audio_download_linux.py
 所得的fid即为media_id，复制粘贴回车即可
 
 # 更新日志
+v1.0.2:
+
+添加重试以解决某个申必bug
+
 v1.0.1：
 
 1. 添加对ID3Tag的支持
