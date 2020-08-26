@@ -7,6 +7,8 @@ import json
 import threading
 import sys
 from mutagen.id3 import ID3, APIC, TIT2, TPE1, COMM
+from tenacity import retry
+
 
 media_id = input('media_id:')
 
@@ -127,6 +129,7 @@ def get_video_info(bvid):
             pages_title[i.get('cid')] = title
     return {'title':title,'pic':pic,'pages_cid':pages_cid,'pages_title':pages_title,'owner':owner,'desc':desc}
 
+@retry((stop=stop_after_attempt(1)))
 def download_video(bvid,cid,like_list_title):
     cid = str(cid)
     info = get_video_info(bvid)
