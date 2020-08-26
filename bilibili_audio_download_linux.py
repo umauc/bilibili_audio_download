@@ -7,6 +7,7 @@ import json
 import threading
 import sys
 from mutagen.id3 import ID3, APIC, TIT2, TPE1, COMM
+from tenacity import retry, stop_after_attempt
 
 media_id = input('media_id:')
 
@@ -127,7 +128,9 @@ def get_video_info(bvid):
             pages_title[i.get('cid')] = title
     return {'title':title,'pic':pic,'pages_cid':pages_cid,'pages_title':pages_title,'owner':owner,'desc':desc}
 
-def download_video(bvid,cid,like_list_title):
+
+@retry(stop=stop_after_attempt(1))
+def download_video(bvid,cid,like_list_title,mthead):
     cid = str(cid)
     info = get_video_info(bvid)
     print(f'获取视频数据({bvid})')
@@ -141,8 +144,14 @@ def download_video(bvid,cid,like_list_title):
     page_num = int(info.get('pages_cid').index(int(cid)))+1
     for i in video_download_url:
         print(f'正在下载：{title}-{page_title}-{page_num}')
-        dl = downloader(i,f'tmp/tmp_{n}.flv')
-        dl.run()
+        if mthead == True:
+            dl = downloader(i,f'tmp/tmp_{n}.flv')
+            dl.run()
+        else:
+            video = requests.get(i,headers={'user-agent': 'my-app/0.0.1', 'referer': 'https://www.bilibili.com'}).content
+            video_file = open(f'tmp/tmp_{n}.flv','wb')
+            video_file.write(video)
+            video_file.close()
     video_part_list = os.listdir('tmp')
     video_part_list_str = ''
     for i in video_part_list:
@@ -212,8 +221,16 @@ except:
     else:
         print('wdnmd你选的什么鬼东西')
         sys.exit()
+thead = input('多线程（实验性）？(Y/N)：').upper()
+if thead == 'Y':
+    mthead = True
+elif thead == 'N':
+    mthead = False
+else:
+    print('wdnmd你选的什么鬼东西')
+    sys.exit()
 for bvid in like_list:
     info = get_video_info(bvid)
     for cid in info.get('pages_cid'):
-        download_video(bvid,cid,like_list_title_get)
+        download_video(bvid,cid,like_list_title_get,mthead)
 print('处理完成')
