@@ -5,6 +5,8 @@ import math
 import os
 import json
 import threading
+import sys
+from mutagen.id3 import ID3, APIC, TIT2, TPE1, COMM
 
 media_id = input('media_id:')
 
@@ -56,6 +58,32 @@ class downloader:
             i.join()
         self.fd.close()
 
+#同样是百度的代码
+#链接：https://blog.csdn.net/weixin_38587484/article/details/97802917
+def SetMp3Info(path, info):
+    songFile = ID3(path)
+    songFile['APIC'] = APIC(  # 插入封面
+        encoding=3,
+        mime='image/png',
+        type=3,
+        desc=u'Cover',
+        data=info['picData']
+    )
+    songFile['TIT2'] = TIT2(  # 插入歌名
+        encoding=3,
+        text=info['title']
+    )
+    songFile['TXXX'] = COMM( # 插入详细信息
+        encoding=3,
+        text=info['desc']
+    )
+    songFile['TPE1'] = TPE1(  # 插入第一演奏家、歌手、等
+        encoding=3,
+        text=info['artist']
+    )
+    songFile
+    songFile.save()
+
 print('开始处理')
 
 def get_video_list(media_id):
@@ -87,6 +115,8 @@ def get_video_info(bvid):
     video_info = requests.get(f'http://api.bilibili.com/x/web-interface/view?bvid={bvid}').json()
     title = video_info.get('data').get('title')
     pic = video_info.get('data').get('pic')
+    owner = video_info.get('data').get('owner').get('name')
+    desc = video_info.get('data').get('desc')
     pages_cid = []
     pages_title = {}
     for i in video_info.get('data').get('pages'):
@@ -95,12 +125,12 @@ def get_video_info(bvid):
             pages_title[i.get('cid')] = i.get('part')
         else:
             pages_title[i.get('cid')] = title
-    return {'title':title,'pic':pic,'pages_cid':pages_cid,'pages_title':pages_title}
+    return {'title':title,'pic':pic,'pages_cid':pages_cid,'pages_title':pages_title,'owner':owner,'desc':desc}
 
 def download_video(bvid,cid,like_list_title):
     cid = str(cid)
     info = get_video_info(bvid)
-    print('获取视频数据')
+    print(f'获取视频数据({bvid})')
     video_download_info = requests.get(f'http://api.bilibili.com/x/player/playurl?bvid={bvid}&cid={cid}').json()
     video_download_url = []
     for i in video_download_info.get('data').get('durl'):
@@ -126,18 +156,26 @@ def download_video(bvid,cid,like_list_title):
     except:
         pass
     os.system(f'ffmpeg -i tmp/output.aac {path}/output.mp3 -loglevel quiet')
+    pic_data = requests.get(info.get('pic')).content
+    artist = info.get('owner')
+    desc = info.get('desc')
+    media_info ={'picData': pic_data, 'title': title, 'artist': artist, 'desc': desc}
     try:
-        if page_title != title:
+        if len(info.get('pages_cid')) != 1:
             os.rename(f'{path}/output.mp3',f'{path}/{title}-{page_title}-{page_num}.mp3')
+            songPath = f'{path}/{title}-{page_title}-{page_num}.mp3'
         else:
             os.rename(f'{path}/output.mp3', f'{path}/{title}.mp3')
+            songPath = f'{path}/{title}.mp3'
+        SetMp3Info(songPath, media_info)
+        print('写入ID3Tag...')
     except:
-        os.remove('download/output.mp3')
+        os.remove(f'{path}/output.mp3')
     already_list = json.loads(open(f'download/{like_list_title_get}/info.json', 'r').read())
     already_list.get('info').append(bvid)
-    open(f'{path}/info.json','w').write(json.dumps(already_list))
     for i in os.listdir('tmp'):
         os.remove(f'tmp/{i}')
+    open(f'{path}/info.json','w').write(json.dumps(already_list))
 
 like_list = get_video_list(media_id)
 like_list_title_get = get_like_list_title(media_id)
@@ -147,17 +185,33 @@ try:
 except:
     pass
 try:
+    for i in os.listdir('tmp'):
+        os.remove(f'tmp/{i}')
+except:
+    pass
+try:
     info = open(f'download/{like_list_title_get}/info.json','r').read()
     already_list_file = json.loads(info)
     for i in already_list_file.get('info'):
-        like_list.remove(i)
+        try:
+            like_list.remove(str(i))
+        except:
+            pass
 except:
     try:
         os.makedirs(f'download/{like_list_title_get}')
     except:
         pass
-    init_json = json.dumps({'info': []})
-    open(f'download/{like_list_title_get}/info.json','w').write(init_json)
+    error = input('在获取下载记录时出现错误，是否创建新的下载记录？（Y/N）：').upper()
+    if error == 'Y':
+        init_json = json.dumps({'info': []})
+        open(f'download/{like_list_title_get}/info.json','w').write(init_json)
+        print('创建成功')
+    elif error == 'N':
+        raise
+    else:
+        print('wdnmd你选的什么鬼东西')
+        sys.exit()
 for bvid in like_list:
     info = get_video_info(bvid)
     for cid in info.get('pages_cid'):
