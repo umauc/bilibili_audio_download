@@ -8,64 +8,14 @@ import threading
 import sys
 from mutagen.id3 import ID3, APIC, TIT2, TPE1, COMM
 from tenacity import retry, stop_after_attempt
-from concurrent.futures import ThreadPoolExecutor, wait
-from threading import Lock
 from requests import get, head
-lock = Lock()
+import platform
 
 media_id = input('media_id:')
 
 ng_str = r'\/:*?"<>|' #win特供文件命名规则
 translate_str = r"¦¦：x？'《》¦" #不满意重命名的用户改这里
 trantab = str.maketrans(ng_str,translate_str)
-
-#这个多线程下载是抄的，我自己不会多线程（
-#链接：https://www.jianshu.com/p/5c71ad87a52c
-class downloader():
-    def __init__(self, url, nums, file):
-        self.url = url
-        self.num = nums
-        self.name = file
-        r = head(self.url,headers={'user-agent': 'my-app/0.0.1', 'referer': 'https://www.bilibili.com'})
-        # 若资源显示302,则迭代找寻源文件
-        while r.status_code == 302:
-            self.url = r.headers['Location']
-            print("该url已重定向至{}".format(self.url))
-            r = head(self.url)
-        self.size = int(r.headers['Content-Length'])
-        print('该文件大小为：{} bytes'.format(self.size))
-
-    def down(self, start, end):
-        headers = {'Range': 'bytes={}-{}'.format(start, end),'user-agent': 'my-app/0.0.1', 'referer': 'https://www.bilibili.com'}
-        # stream = True 下载的数据不会保存在内存中
-        r = get(self.url, headers=headers, stream=True)
-        # 写入文件对应位置,加入文件锁
-        lock.acquire()
-        with open(self.name, "rb+") as fp:
-            fp.seek(start)
-            fp.write(r.content)
-            lock.release()
-            # 释放锁
-
-    def run(self):
-        # 创建一个和要下载文件一样大小的文件
-        fp = open(self.name, "wb")
-        fp.truncate(self.size)
-        fp.close()
-        # 启动多线程写文件
-        part = self.size // self.num
-        pool = ThreadPoolExecutor(max_workers=self.num)
-        futures = []
-        for i in range(self.num):
-            start = part * i
-            # 最后一块
-            if i == self.num - 1:
-                end = self.size -1
-            else:
-                end = start + part - 1
-            futures.append(pool.submit(self.down, start, end))
-        wait(futures)
-        print('%s 下载完成' % self.name)
 
 #同样是百度的代码
 #链接：https://blog.csdn.net/weixin_38587484/article/details/97802917
@@ -153,7 +103,10 @@ def download_video(bvid,cid,like_list_title,mthead):
     for i in video_download_url:
         print(f'正在下载：{title}-{page_title}-{page_num}')
         if mthead == True:
-            os.system(f'aria2c.exe "{i}" -d "tmp" -s16 -x16 -k1M -j16 -o "tmp_{n}.flv" --referer "https://www.bilibili.com" -U "my-app/0.0.1" --file-allocation=none')
+            if platform.system() == 'Windows':
+                os.system(f'aria2c.exe "{i}" -d "tmp" -s16 -x16 -k1M -j16 -o "tmp_{n}.flv" --referer "https://www.bilibili.com" -U "my-app/0.0.1" --file-allocation=none')
+            else:
+                os.system(f'aria2c "{i}" -d "tmp" -s16 -x16 -k1M -j16 -o "tmp_{n}.flv" --referer "https://www.bilibili.com" -U "my-app/0.0.1" --file-allocation=none')
             n = n + 1
         else:
             video = requests.get(i,headers={'user-agent': 'my-app/0.0.1', 'referer': 'https://www.bilibili.com'}).content
@@ -167,13 +120,19 @@ def download_video(bvid,cid,like_list_title,mthead):
         video_part_list_str = video_part_list_str + "file '" + i +"'\n"
     open('tmp/filename.txt','w').write(video_part_list_str)
     print('转换中...')
-    os.system('ffmpeg.exe -f concat -i tmp/filename.txt -c copy tmp/output.aac')
+    if platform.system() == 'Windows':
+        os.system('ffmpeg.exe -f concat -i tmp/filename.txt -c copy tmp/output.aac')
+    else:
+        os.system('ffmpeg -f concat -i tmp/filename.txt -c copy tmp/output.aac')
     path = f'download/{like_list_title}'
     try:
         os.makedirs(f'download/{like_list_title}')
     except:
         pass
-    os.system(f'ffmpeg.exe -i tmp/output.aac {path}/output.mp3')
+    if platform.system() == 'Windows':
+        os.system(f'ffmpeg.exe -i tmp/output.aac {path}/output.mp3')
+    else:
+        os.system(f'ffmpeg -i tmp/output.aac {path}/output.mp3')
     pic_data = requests.get(info.get('pic')).content
     artist = info.get('owner')
     desc = info.get('desc')
